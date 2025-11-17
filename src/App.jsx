@@ -1,73 +1,104 @@
-function App() {
+import { useEffect, useMemo, useState } from "react";
+import Navbar from "./components/Navbar.jsx";
+import BotCard from "./components/BotCard.jsx";
+import BotBuilder from "./components/BotBuilder.jsx";
+import TaskPanel from "./components/TaskPanel.jsx";
+
+const API = import.meta.env.VITE_BACKEND_URL;
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [retailers, setRetailers] = useState([]);
+  const [bots, setBots] = useState([]);
+  const [task, setTask] = useState(null);
+
+  useEffect(() => {
+    // bootstrap: create or fetch demo user
+    async function bootstrap() {
+      const res = await fetch(`${API}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "demo@shopbots.ai", name: "Demo User" }),
+      });
+      const u = await res.json();
+      setUser(u);
+
+      const r = await fetch(`${API}/api/retailers`);
+      const rj = await r.json();
+      setRetailers(rj.supported || []);
+
+      const bl = await fetch(`${API}/api/bots?user_id=${u.id}`);
+      const bj = await bl.json();
+      setBots(bj);
+    }
+    bootstrap();
+  }, []);
+
+  const handleCreateBot = () => {
+    // scroll to builder
+    document.getElementById("builder")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const onBotSaved = async (bot) => {
+    const bl = await fetch(`${API}/api/bots?user_id=${user.id}`);
+    const bj = await bl.json();
+    setBots(bj);
+  };
+
+  const runBot = async (bot) => {
+    const res = await fetch(`${API}/api/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, bot_id: bot.id, prompt: bot.goals || "find best deals" }),
+    });
+    const data = await res.json();
+    setTask(data);
+  };
+
+  const approve = async (index) => {
+    const res = await fetch(`${API}/api/tasks/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task_id: task.id, index }),
+    });
+    const data = await res.json();
+    setTask(data);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <Navbar onCreateBot={handleCreateBot} />
 
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <section className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Your Shopping Bots</h1>
+            <p className="text-white/60">Configure bots that shop for you using AI actions</p>
           </div>
+        </section>
 
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
+        <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {bots.map((b) => (
+            <BotCard key={b.id} bot={b} onRun={runBot} onEdit={() => {}} />
+          ))}
+          {bots.length === 0 && (
+            <div className="col-span-full text-white/60">No bots yet — create your first one below.</div>
+          )}
+        </section>
 
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
+        <section id="builder" className="space-y-4">
+          <h2 className="text-xl font-semibold">Create a new bot</h2>
+          {user && <BotBuilder user={user} retailers={retailers} onSaved={onBotSaved} />}
+        </section>
 
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Latest task</h2>
+          {!task && <div className="text-white/60">Run a bot to see candidate products here.</div>}
+          {task && <TaskPanel task={task} onApprove={approve} />}
+        </section>
+      </main>
 
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
-          </div>
-        </div>
-      </div>
+      <footer className="py-8 text-center text-white/50 text-sm">Made with ❤️ — ACP integration ready</footer>
     </div>
-  )
+  );
 }
-
-export default App
